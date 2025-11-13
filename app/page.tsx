@@ -1,3 +1,4 @@
+// app/page.tsx
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -44,7 +45,7 @@ export default function HomePage() {
             <div className="space-y-8">
               <Badge className="inline-flex items-center gap-2 px-4 py-2 text-sm" variant="secondary">
                 <ShieldCheck className="h-4 w-4" />
-                Trusted Healthcare Partner in Cameroon
+                Trusted Healthcare Partner in Eswatini
               </Badge>
               <div className="space-y-4">
                 <h1 className="text-5xl font-bold leading-tight tracking-tight text-balance md:text-6xl lg:text-7xl">
@@ -55,7 +56,7 @@ export default function HomePage() {
                 </h1>
                 <p className="text-lg leading-relaxed text-muted-foreground text-pretty md:text-xl">
                   Experience professional pharmacy services with quality medications, expert prescription handling, and
-                  reliable delivery across Cameroon. Your wellness journey starts here.
+                  reliable delivery across Eswatini. Your wellness journey starts here.
                 </p>
               </div>
               <div className="flex flex-col gap-4 sm:flex-row">
@@ -165,7 +166,7 @@ export default function HomePage() {
               </CardHeader>
               <CardContent>
                 <CardDescription className="leading-relaxed">
-                  Quick and reliable delivery across Cameroon with real-time tracking. Get your medications when you
+                  Quick and reliable delivery across Eswatini with real-time tracking. Get your medications when you
                   need them.
                 </CardDescription>
               </CardContent>
@@ -331,7 +332,7 @@ export default function HomePage() {
             </div>
             <div className="text-center text-sm text-muted-foreground md:text-left">
               <p>&copy; {new Date().getFullYear()} PharmaCare. All rights reserved.</p>
-              <p className="mt-1">Professional pharmacy services in Cameroon</p>
+              <p className="mt-1">Professional pharmacy services in Eswatini</p>
             </div>
           </div>
         </div>
