@@ -405,7 +405,7 @@ export function PrescriptionUploadPage() {
                   </div>
                   <div>
                     <h4 className="font-semibold">Pharmacist Support</h4>
-                    <p className="text-sm text-muted-foreground">Available 24/7 for questions</p>
+                    <p className="text-sm text-muted-foreground">Available 24/7 for questions online</p>
                   </div>
                 </div>
               </div>
