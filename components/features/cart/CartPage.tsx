@@ -1,7 +1,7 @@
-// components/features/cart/CartPage.tsx
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { 
   ShoppingCart, 
@@ -15,7 +15,9 @@ import {
   Clock,
   AlertCircle,
   Heart,
-  Package
+  Package,
+  CreditCard,
+  MapPin
 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,15 +26,28 @@ import { Separator } from "@/components/ui/separator"
 import { useCart } from "@/lib/hooks/use-cart"
 import { useToast } from "@/hooks/use-toast"
 
+// Currency configuration for Eswatini
+const CURRENCY = {
+  code: 'SZL',
+  symbol: 'E',
+  name: 'Lilangeni'
+}
+
 export function CartPage() {
+  const router = useRouter()
   const { items, removeItem, updateQuantity, clearCart, getTotal, getItemCount } = useCart()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
 
+  // Format currency for display
+  const formatCurrency = (amount: number) => {
+    return `${CURRENCY.symbol} ${amount.toLocaleString()}`
+  }
+
   // Calculate prices using your actual hook functions
   const subtotal = getTotal()
-  const shippingFee = subtotal > 50000 ? 0 : 2500 // Free shipping over 50,000 FCFA
-  const tax = subtotal * 0.18 // 18% VAT
+  const shippingFee = subtotal > 500 ? 0 : 25 // Free shipping over E 500
+  const tax = subtotal * 0.15 // 15% VAT for Eswatini
   const total = subtotal + shippingFee + tax
   const itemCount = getItemCount()
 
@@ -59,28 +74,27 @@ export function CartPage() {
     })
   }
 
-  const handleCheckout = async () => {
-    setIsLoading(true)
-    try {
-      // Simulate checkout process
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      // TODO: Integrate with payment system
-      console.log('Proceeding to checkout with items:', items)
-      
+  const handleCheckout = () => {
+    // Check if there are prescription items that need verification
+    const hasPrescriptionItems = items.some(item => item.product.requiresPrescription)
+    
+    if (hasPrescriptionItems) {
       toast({
-        title: "Proceeding to checkout",
-        description: "Redirecting to secure payment...",
+        title: "Prescription Required",
+        description: "You'll need to upload your prescription during checkout.",
+        variant: "default"
       })
-    } catch (error) {
-      toast({
-        title: "Checkout failed",
-        description: "Please try again.",
-        variant: "destructive"
-      })
-    } finally {
-      setIsLoading(false)
     }
+
+    // Show loading state
+    setIsLoading(true)
+    
+    // Simulate brief loading before redirect
+    setTimeout(() => {
+      // Redirect to checkout page
+      router.push('/checkout')
+      setIsLoading(false)
+    }, 500)
   }
 
   const TrustBadges = () => (
@@ -99,6 +113,11 @@ export function CartPage() {
       </div>
     </div>
   )
+
+  // Calculate savings for progress bar
+  const freeShippingThreshold = 500
+  const amountToFreeShipping = Math.max(0, freeShippingThreshold - subtotal)
+  const progressPercentage = Math.min(100, (subtotal / freeShippingThreshold) * 100)
 
   if (items.length === 0) {
     return (
@@ -207,6 +226,31 @@ export function CartPage() {
             </div>
           </div>
 
+          {/* Free Shipping Progress Bar */}
+          {shippingFee > 0 && (
+            <Card className="mb-6 border-green-200 bg-green-50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-800">
+                      Add {formatCurrency(amountToFreeShipping)} for FREE shipping!
+                    </span>
+                  </div>
+                  <Badge variant="outline" className="text-green-700 border-green-300">
+                    {progressPercentage.toFixed(0)}%
+                  </Badge>
+                </div>
+                <div className="w-full bg-green-200 rounded-full h-2">
+                  <div 
+                    className="bg-green-600 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${progressPercentage}%` }}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid gap-8 lg:grid-cols-3">
             {/* Cart Items */}
             <div className="lg:col-span-2">
@@ -214,7 +258,7 @@ export function CartPage() {
                 <CardHeader className="pb-4">
                   <CardTitle className="flex items-center gap-2">
                     <ShoppingCart className="h-5 w-5" />
-                    Cart Items
+                    Cart Items ({itemCount})
                   </CardTitle>
                   <CardDescription>
                     Manage your selected products
@@ -223,14 +267,14 @@ export function CartPage() {
                 <CardContent className="p-0">
                   <div className="divide-y">
                     {items.map((item) => (
-                      <div key={item.productId} className="flex gap-4 p-6">
+                      <div key={item.productId} className="flex gap-4 p-6 hover:bg-muted/50 transition-colors">
                         {/* Product Image */}
                         <div className="relative flex-shrink-0">
                           <div className="h-20 w-20 overflow-hidden rounded-lg border bg-muted">
                             <img
                               src={item.product.imageUrl || "/placeholder.svg"}
                               alt={item.product.name}
-                              className="h-full w-full object-cover"
+                              className="h-full w-full object-cover transition-transform hover:scale-105"
                             />
                           </div>
                           {item.product.requiresPrescription && (
@@ -244,9 +288,9 @@ export function CartPage() {
                         {/* Product Details */}
                         <div className="flex flex-1 flex-col gap-2">
                           <div className="flex items-start justify-between">
-                            <div>
+                            <div className="flex-1">
                               <h3 className="font-semibold leading-tight">{item.product.name}</h3>
-                              <p className="text-sm text-muted-foreground line-clamp-1">
+                              <p className="text-sm text-muted-foreground line-clamp-2">
                                 {item.product.description}
                               </p>
                             </div>
@@ -254,7 +298,7 @@ export function CartPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleRemoveItem(item.productId, item.product.name)}
-                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -267,19 +311,19 @@ export function CartPage() {
                                 <Button
                                   variant="outline"
                                   size="icon"
-                                  className="h-8 w-8"
+                                  className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
                                   onClick={() => handleQuantityChange(item.productId, item.quantity - 1)}
                                   disabled={item.quantity <= 1}
                                 >
                                   <Minus className="h-3 w-3" />
                                 </Button>
-                                <span className="w-8 text-center text-sm font-medium">
+                                <span className="w-8 text-center text-sm font-medium bg-muted px-2 py-1 rounded">
                                   {item.quantity}
                                 </span>
                                 <Button
                                   variant="outline"
                                   size="icon"
-                                  className="h-8 w-8"
+                                  className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
                                   onClick={() => handleQuantityChange(item.productId, item.quantity + 1)}
                                   disabled={item.quantity >= item.product.stock}
                                 >
@@ -288,7 +332,7 @@ export function CartPage() {
                               </div>
 
                               {item.product.stock < 10 && item.quantity < item.product.stock && (
-                                <Badge variant="outline" className="text-xs text-amber-600">
+                                <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
                                   Only {item.product.stock} left
                                 </Badge>
                               )}
@@ -296,10 +340,10 @@ export function CartPage() {
 
                             <div className="text-right">
                               <p className="text-lg font-bold text-primary">
-                                {(item.product.price * item.quantity).toLocaleString()} FCFA
+                                {formatCurrency(item.product.price * item.quantity)}
                               </p>
                               <p className="text-sm text-muted-foreground">
-                                {item.product.price.toLocaleString()} FCFA each
+                                {formatCurrency(item.product.price)} each
                               </p>
                             </div>
                           </div>
@@ -348,8 +392,8 @@ export function CartPage() {
 
             {/* Order Summary */}
             <div className="lg:col-span-1">
-              <Card className="sticky top-24">
-                <CardHeader>
+              <Card className="sticky top-24 border-2 border-primary/20">
+                <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10">
                   <CardTitle className="flex items-center gap-2">
                     <Package className="h-5 w-5" />
                     Order Summary
@@ -363,42 +407,46 @@ export function CartPage() {
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Subtotal ({itemCount} items)</span>
-                      <span className="font-medium">{subtotal.toLocaleString()} FCFA</span>
+                      <span className="font-medium">{formatCurrency(subtotal)}</span>
                     </div>
                     
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Shipping</span>
                       <span className="font-medium">
                         {shippingFee === 0 ? (
-                          <Badge variant="secondary" className="text-green-600">
+                          <Badge variant="secondary" className="text-green-600 bg-green-100">
                             FREE
                           </Badge>
                         ) : (
-                          `${shippingFee.toLocaleString()} FCFA`
+                          formatCurrency(shippingFee)
                         )}
                       </span>
                     </div>
                     
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tax (VAT 18%)</span>
-                      <span className="font-medium">{tax.toLocaleString()} FCFA</span>
+                      <span className="text-muted-foreground">Tax (VAT 15%)</span>
+                      <span className="font-medium">{formatCurrency(tax)}</span>
                     </div>
 
                     <Separator />
 
                     <div className="flex justify-between text-lg font-bold">
                       <span>Total</span>
-                      <span className="text-primary">{total.toLocaleString()} FCFA</span>
+                      <span className="text-primary">{formatCurrency(total)}</span>
                     </div>
+                  </div>
 
-                    {shippingFee > 0 && (
-                      <div className="rounded-lg bg-muted p-3 text-center">
-                        <p className="text-sm">
-                          Add {(50000 - subtotal).toLocaleString()} FCFA more for{' '}
-                          <strong className="text-green-600">FREE shipping</strong>
-                        </p>
+                  {/* MTN Mobile Money Preview */}
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100">
+                        <CreditCard className="h-4 w-4 text-yellow-600" />
                       </div>
-                    )}
+                      <div>
+                        <h4 className="font-semibold text-yellow-800 text-sm">MTN Mobile Money</h4>
+                        <p className="text-xs text-yellow-700">Fast and secure payment</p>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Prescription Warning */}
@@ -422,16 +470,16 @@ export function CartPage() {
                     onClick={handleCheckout}
                     disabled={isLoading}
                     size="lg"
-                    className="w-full gap-2"
+                    className="w-full gap-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg"
                   >
                     {isLoading ? (
                       <>
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        Processing...
+                        Redirecting...
                       </>
                     ) : (
                       <>
-                        <ShoppingCart className="h-5 w-5" />
+                        <CreditCard className="h-5 w-5" />
                         Proceed to Checkout
                       </>
                     )}
@@ -444,6 +492,14 @@ export function CartPage() {
                       <span>Your payment is secure and encrypted</span>
                     </div>
                   </div>
+
+                  {/* Delivery Estimate */}
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <div className="flex items-center gap-2 text-sm text-blue-800">
+                      <MapPin className="h-4 w-4" />
+                      <span>Delivery in 24-48 hours across Eswatini</span>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -453,7 +509,7 @@ export function CartPage() {
                   <div className="space-y-4">
                     <h4 className="font-semibold">Need more items?</h4>
                     <Link href="/shop">
-                      <Button variant="outline" className="w-full gap-2">
+                      <Button variant="outline" className="w-full gap-2 hover:bg-primary/10">
                         <ArrowLeft className="h-4 w-4" />
                         Continue Shopping
                       </Button>

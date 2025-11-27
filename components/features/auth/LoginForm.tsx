@@ -18,6 +18,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
+import { toast } from 'sonner'
+import { AuthService } from '@/lib/firebase/services/auth'
 
 export function LoginForm() {
   const router = useRouter()
@@ -28,25 +30,39 @@ export function LoginForm() {
     password: '',
     rememberMe: false
   })
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    
+    setErrorMessage(null)
+
     try {
-      // TODO: Integrate with Firebase Auth
-      console.log('Login attempt:', { email: formData.email })
+      console.log('🔄 Starting login process for:', formData.email);
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const user = await AuthService.signIn(formData.email, formData.password);
       
-      // Redirect to dashboard
-      router.push('/')
+      console.log('✅ Login successful!');
+      console.log('👤 Full user object:', user);
+      console.log('🎯 User role:', user.role);
+      console.log('🆔 User UID:', user.uid);
+      
+      toast.success('Signed in successfully');
+      
+      // Debug the redirect logic
+      console.log('🔄 Checking role for redirect...');
+      const destination = user?.role?.toLowerCase() === 'admin' ? '/admin' : '/';
+      console.log('📍 Redirecting to:', destination);
+      
+      router.push(destination);
       
     } catch (error: any) {
-      console.error('Login error:', error)
+      console.error('❌ Login error:', error);
+      const message = error?.message || 'Failed to sign in. Please try again.';
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
@@ -56,6 +72,9 @@ export function LoginForm() {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }))
+    if (errorMessage) {
+      setErrorMessage(null)
+    }
   }
 
   return (
@@ -173,6 +192,10 @@ export function LoginForm() {
                     Remember me for 30 days
                   </Label>
                 </div>
+
+                {errorMessage && (
+                  <p className="text-sm text-red-600 text-center">{errorMessage}</p>
+                )}
 
                 {/* Submit Button */}
                 <Button

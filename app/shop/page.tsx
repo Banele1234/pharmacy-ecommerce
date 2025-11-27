@@ -10,92 +10,42 @@ import { Pill, Search, ShoppingCart, Star, ArrowLeft, Plus, Check, Package, Hear
 import { useCart } from "@/lib/hooks/use-cart"
 import { useToast } from "@/hooks/use-toast"
 import type { Product } from "@/lib/types"
-
-// Mock products data - replace with Firebase fetch
-const mockProducts: Product[] = [
-  {
-    id: "1",
-    name: "Paracetamol 500mg",
-    description: "Effective pain relief and fever reducer. Safe for adults and children over 12 years.",
-    price: 2500,
-    category: "otc",
-    imageUrl: "/paracetamol-medicine-box-white-background.jpg",
-    stock: 150,
-    requiresPrescription: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: "2",
-    name: "Amoxicillin 250mg",
-    description: "Antibiotic for bacterial infections. Prescription required for purchase.",
-    price: 8500,
-    category: "prescription",
-    imageUrl: "/antibiotic-medicine-capsules-box.jpg",
-    stock: 80,
-    requiresPrescription: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: "3",
-    name: "Vitamin C 1000mg",
-    description: "Immune system support with high-potency vitamin C. 60 tablets per bottle.",
-    price: 5500,
-    category: "supplements",
-    imageUrl: "/vitamin-c-supplement-bottle-orange.jpg",
-    stock: 200,
-    requiresPrescription: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: "4",
-    name: "Ibuprofen 400mg",
-    description: "Anti-inflammatory pain reliever for headaches, muscle pain, and arthritis.",
-    price: 3200,
-    category: "otc",
-    imageUrl: "/ibuprofen-pain-relief-tablets.jpg",
-    stock: 120,
-    requiresPrescription: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: "5",
-    name: "Multivitamin Complex",
-    description: "Complete daily multivitamin with essential minerals. 30-day supply.",
-    price: 7800,
-    category: "supplements",
-    imageUrl: "/multivitamin-supplement-bottle-colorful.jpg",
-    stock: 95,
-    requiresPrescription: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: "6",
-    name: "Omeprazole 20mg",
-    description: "Treats acid reflux and stomach ulcers. Prescription medication.",
-    price: 6500,
-    category: "prescription",
-    imageUrl: "/omeprazole-medicine-capsules.jpg",
-    stock: 15,
-    requiresPrescription: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-]
+import { productService } from '@/lib/firebase/services/products'
+import { ProductImage } from "@/components/ui/ProductImage" // Import the new component
 
 export default function ShopPage() {
-  const [products, setProducts] = useState<Product[]>(mockProducts)
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>(mockProducts)
+  const [products, setProducts] = useState<Product[]>([])
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [addedToCart, setAddedToCart] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const { addItem, getItemCount } = useCart()
   const { toast } = useToast()
+
+  // Load products from Firebase
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setLoading(true)
+        const productsData = await productService.getProducts()
+        setProducts(productsData)
+        setFilteredProducts(productsData)
+      } catch (error) {
+        console.error('Error loading products:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load products. Please try again.",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadProducts()
+  }, [toast])
 
   useEffect(() => {
     let filtered = products
@@ -118,6 +68,24 @@ export default function ShopPage() {
   }, [searchQuery, selectedCategory, products])
 
   const handleAddToCart = (product: Product) => {
+    if (product.requiresPrescription) {
+      toast({
+        title: "Prescription Required",
+        description: `${product.name} requires a prescription. Please upload one first.`,
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (product.stock === 0) {
+      toast({
+        title: "Out of Stock",
+        description: `${product.name} is currently out of stock.`,
+        variant: "destructive"
+      })
+      return
+    }
+
     addItem(product, 1)
     setAddedToCart(product.id)
     setTimeout(() => setAddedToCart(null), 2000)
@@ -128,12 +96,59 @@ export default function ShopPage() {
     })
   }
 
+  // Format price in Emalangeni
+  const formatPrice = (price: number) => {
+    return `E${price.toFixed(2)}`
+  }
+
   const categories = [
     { id: "all", label: "All Products", icon: Package },
-    { id: "prescription", label: "Prescription", icon: Pill },
-    { id: "otc", label: "Over-the-Counter", icon: Heart },
-    { id: "supplements", label: "Supplements", icon: Star },
+    { id: "pain-relief", label: "Pain Relief", icon: Pill },
+    { id: "antibiotics", label: "Antibiotics", icon: Heart },
+    { id: "vitamins", label: "Vitamins", icon: Star },
+    { id: "respiratory", label: "Respiratory", icon: AlertCircle },
+    { id: "digestive-health", label: "Digestive Health", icon: Heart },
+    { id: "diabetes", label: "Diabetes", icon: Heart },
   ]
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="container mx-auto flex h-16 items-center justify-between px-4">
+            <Link href="/" className="flex items-center gap-2 transition-transform hover:scale-105">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70">
+                <Pill className="h-6 w-6 text-primary-foreground" />
+              </div>
+              <span className="text-xl font-bold">PharmaCare</span>
+            </Link>
+            <nav className="flex items-center gap-2">
+              <Link href="/cart">
+                <Button variant="outline" className="relative gap-2 bg-transparent">
+                  <ShoppingCart className="h-4 w-4" />
+                  <span className="hidden sm:inline">Cart</span>
+                  {getItemCount() > 0 && (
+                    <Badge className="absolute -right-2 -top-2 h-5 w-5 rounded-full p-0 text-xs">{getItemCount()}</Badge>
+                  )}
+                </Button>
+              </Link>
+              <Link href="/login">
+                <Button variant="ghost">Login</Button>
+              </Link>
+            </nav>
+          </div>
+        </header>
+
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading products...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -236,10 +251,10 @@ export default function ShopPage() {
               >
                 {/* Product Image */}
                 <div className="relative aspect-square overflow-hidden bg-muted">
-                  <img
-                    src={product.imageUrl || "/placeholder.svg"}
+                  <ProductImage
+                    src={product.imageUrl}
                     alt={product.name}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                    className="h-full w-full transition-transform duration-300 group-hover:scale-110"
                   />
                   {product.requiresPrescription && (
                     <Badge className="absolute left-3 top-3 gap-1 bg-destructive/90 backdrop-blur">
@@ -247,11 +262,19 @@ export default function ShopPage() {
                       Prescription Required
                     </Badge>
                   )}
-                  {product.stock < 20 && (
-                    <Badge className="absolute right-3 top-3 bg-warning text-warning-foreground backdrop-blur">
+                  {product.stock < 20 && product.stock > 0 && (
+                    <Badge variant="secondary" className="absolute right-3 top-3 backdrop-blur">
                       Low Stock
                     </Badge>
                   )}
+                  {product.stock === 0 && (
+                    <Badge variant="destructive" className="absolute right-3 top-3 backdrop-blur">
+                      Out of Stock
+                    </Badge>
+                  )}
+                  <Badge variant="outline" className="absolute left-3 bottom-3 backdrop-blur">
+                    {product.category}
+                  </Badge>
                 </div>
 
                 {/* Product Info */}
@@ -268,8 +291,10 @@ export default function ShopPage() {
                 <CardFooter className="flex-col gap-3 border-t pt-4">
                   <div className="flex w-full items-center justify-between">
                     <div>
-                      <p className="text-2xl font-bold text-primary">{product.price.toLocaleString()} FCFA</p>
-                      <p className="text-xs text-muted-foreground">In stock: {product.stock}</p>
+                      <p className="text-2xl font-bold text-primary">{formatPrice(product.price)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1">
                       <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -278,7 +303,7 @@ export default function ShopPage() {
                   </div>
                   <Button
                     onClick={() => handleAddToCart(product)}
-                    disabled={product.stock === 0 || addedToCart === product.id}
+                    disabled={product.stock === 0 || addedToCart === product.id || product.requiresPrescription}
                     className="w-full gap-2 transition-all"
                     variant={addedToCart === product.id ? "secondary" : "default"}
                   >
@@ -287,6 +312,13 @@ export default function ShopPage() {
                         <Check className="h-4 w-4" />
                         Added to Cart!
                       </>
+                    ) : product.requiresPrescription ? (
+                      <>
+                        <AlertCircle className="h-4 w-4" />
+                        Prescription Required
+                      </>
+                    ) : product.stock === 0 ? (
+                      "Out of Stock"
                     ) : (
                       <>
                         <Plus className="h-4 w-4" />

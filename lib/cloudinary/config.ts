@@ -1,18 +1,9 @@
-export const cloudinaryConfig = {
-  cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET,
-}
+import { v2 as cloudinary } from 'cloudinary';
 
-export async function uploadToCloudinary(file: File): Promise<string> {
-  const formData = new FormData()
-  formData.append("file", file)
-  formData.append("upload_preset", cloudinaryConfig.uploadPreset!)
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME='dl54rthoj',
+  api_key: process.env.CLOUDINARY_API_KEY='977722539341777',
+  api_secret: process.env.CLOUDINARY_API_SECRET='1CA2aGeNVhng-jDziuQVUP66kyc',
+});
 
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/image/upload`, {
-    method: "POST",
-    body: formData,
-  })
-
-  const data = await response.json()
-  return data.secure_url
-}
+export default cloudinary;
