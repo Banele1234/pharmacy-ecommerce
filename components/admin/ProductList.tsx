@@ -130,17 +130,12 @@ export function ProductList({
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    {product.image ? (
-                      <img
-                        src={product.image}
-                        alt={product.name}
-                        className="h-10 w-10 rounded-lg object-cover"
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                        <Package className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                    )}
+                    <img
+                      src={product.imageUrl || product.image || '/placeholder.jpg'}
+                      alt={product.name}
+                      className="h-10 w-10 rounded-lg object-cover"
+                      onError={e => { e.currentTarget.src = '/placeholder.jpg'; }}
+                    />
                     <div>
                       <div className="font-medium">{product.name}</div>
                       <div className="text-sm text-muted-foreground line-clamp-1">

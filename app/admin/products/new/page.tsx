@@ -9,16 +9,18 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { ArrowLeft, Save, Package } from 'lucide-react'
+import { ArrowLeft, Save, Package, AlertCircle, Database } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { collection, addDoc } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase/config'
+import { toast } from 'sonner'
 
 export default function NewProductPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [firebaseReady, setFirebaseReady] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -30,6 +32,19 @@ export default function NewProductPage() {
     prescriptionRequired: false,
     image: ''
   })
+
+  // Check if Firebase is initialized
+  useEffect(() => {
+    console.log('🔄 Checking Firebase Firestore initialization...')
+    
+    if (db) {
+      setFirebaseReady(true)
+      console.log('✅ Firebase Firestore is ready')
+    } else {
+      console.error('❌ Firebase Firestore is not initialized')
+      toast.error('Firebase Firestore not initialized. Please check your configuration.')
+    }
+  }, [])
 
   const categories = [
     'Antibiotics',
@@ -44,6 +59,38 @@ export default function NewProductPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    console.log('🔄 Submit button clicked')
+    console.log('✅ Firebase ready:', firebaseReady)
+    console.log('✅ DB exists:', !!db)
+    
+    // Check if Firebase is ready
+    if (!firebaseReady || !db) {
+      toast.error('Firebase Firestore is not initialized. Please refresh the page.')
+      console.error('❌ Firebase not ready, cannot submit')
+      return
+    }
+    
+    // Validate required fields
+    if (!formData.name || !formData.category || !formData.price || !formData.stock) {
+      toast.error('Please fill in all required fields.')
+      return
+    }
+
+    // Validate numeric fields
+    const price = parseFloat(formData.price)
+    const stock = parseInt(formData.stock)
+    
+    if (isNaN(price) || price < 0) {
+      toast.error('Please enter a valid price.')
+      return
+    }
+    
+    if (isNaN(stock) || stock < 0) {
+      toast.error('Please enter a valid stock quantity.')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -60,25 +107,58 @@ export default function NewProductPage() {
         imageUrl: formData.image || '',
         status: 'active',
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }
 
-      console.log('🔄 Saving product to Firestore (products/page.tsx):', productData)
-
-      // Save to Firestore using initialized db
+      console.log('🔄 Saving product to Firestore:', productData)
+      
+      // Save to Firestore using db directly
       const docRef = await addDoc(collection(db, 'products'), productData);
       
       console.log('✅ Product created with ID:', docRef.id)
       
       // Show success message
-      alert(`Product "${formData.name}" created successfully!`)
+      toast.success(`Product "${formData.name}" created successfully!`)
       
-      // Force refresh and redirect with timestamp to prevent caching
-      router.push('/admin/products?refresh=' + Date.now())
+      // Redirect to products list
+      setTimeout(() => {
+        router.push('/admin/products')
+        router.refresh() // Refresh the page data
+      }, 1500)
       
     } catch (error: any) {
-      console.error('❌ Error creating product:', error)
-      alert(`Failed to create product: ${error.message}`)
+      console.error('❌ Error creating product:')
+      console.error('Error name:', error.name)
+      console.error('Error message:', error.message)
+      console.error('Error code:', error.code)
+      console.error('Error stack:', error.stack)
+      
+      // More specific error handling
+      if (error.code === 'permission-denied') {
+        toast.error(
+          <div className="space-y-2">
+            <p className="font-semibold">Permission Denied</p>
+            <p className="text-sm">Check your Firestore security rules in Firebase Console.</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => window.open('https://console.firebase.google.com/project/pharmacare-10111/firestore/rules', '_blank')}
+              className="mt-2"
+            >
+              <Database className="h-4 w-4 mr-2" />
+              Open Firestore Rules
+            </Button>
+          </div>
+        )
+      } else if (error.code === 'unavailable') {
+        toast.error('Network error: Please check your internet connection.')
+      } else if (error.code === 'failed-precondition') {
+        toast.error('Firestore not initialized properly. Please refresh the page.')
+      } else if (error.name === 'FirebaseError') {
+        toast.error(`Firebase Error (${error.code}): ${error.message}`)
+      } else {
+        toast.error(`Failed to create product: ${error.message || 'Unknown error occurred'}`)
+      }
     } finally {
       setLoading(false)
     }
@@ -89,6 +169,71 @@ export default function NewProductPage() {
       ...prev,
       [field]: value
     }))
+  }
+
+  // Test Firestore connection
+  const testConnection = async () => {
+    try {
+      console.log('🔍 Testing Firestore connection...')
+      
+      if (!db) {
+        toast.error('Firestore is not initialized')
+        return
+      }
+      
+      // Try to write a test document
+      const testData = {
+        test: true,
+        timestamp: serverTimestamp(),
+        message: 'Test connection'
+      }
+      
+      const testRef = await addDoc(collection(db, 'test_collection'), testData)
+      console.log('✅ Test document created with ID:', testRef.id)
+      toast.success('Firestore connection test successful!')
+      
+      // Clean up test document (optional)
+      setTimeout(async () => {
+        try {
+          // You might need to import deleteDoc if you want to clean up
+          // await deleteDoc(doc(db, 'test_collection', testRef.id))
+        } catch (e) {
+          console.log('Test document cleanup not needed')
+        }
+      }, 5000)
+      
+    } catch (error: any) {
+      console.error('❌ Firestore test failed:', error)
+      toast.error(`Firestore test failed: ${error.code || error.message}`)
+    }
+  }
+
+  // Show error if Firebase is not ready
+  if (!firebaseReady) {
+    return (
+      <AdminLayout activePage="/admin/products">
+        <div className="min-h-[400px] flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <AlertCircle className="h-12 w-12 text-amber-500 mx-auto" />
+            <h2 className="text-xl font-semibold">Firebase Firestore Not Initialized</h2>
+            <p className="text-muted-foreground">
+              Firestore database connection failed. Please check your Firebase configuration.
+            </p>
+            <div className="space-y-2">
+              <Button onClick={() => window.location.reload()}>
+                Refresh Page
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={testConnection}
+              >
+                Test Firestore Connection
+              </Button>
+            </div>
+          </div>
+        </div>
+      </AdminLayout>
+    )
   }
 
   return (
@@ -108,6 +253,15 @@ export default function NewProductPage() {
               Create a new product in your pharmacy inventory
             </p>
           </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={testConnection}
+            className="ml-auto gap-2"
+          >
+            <Database className="h-4 w-4" />
+            Test Connection
+          </Button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -151,6 +305,7 @@ export default function NewProductPage() {
                       <Select 
                         value={formData.category} 
                         onValueChange={(value) => handleChange('category', value)}
+                        required
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select category" />
@@ -320,8 +475,9 @@ export default function NewProductPage() {
                   {formData.image && (
                     <div className="mt-2">
                       <img 
-                        src={formData.image} 
-                        alt="Product preview" 
+                        src={formData.image || '/placeholder.jpg'} 
+                        onError={e => e.currentTarget.src = '/placeholder.jpg'}
+                        alt="Product preview"
                         className="h-20 w-20 object-cover rounded-lg mx-auto"
                       />
                     </div>
