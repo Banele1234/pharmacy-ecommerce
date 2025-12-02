@@ -1,414 +1,246 @@
-// components/features/prescription/PrescriptionUploadPage.tsx
-'use client'
+"use client"
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { 
-  Upload, 
-  FileText, 
-  Shield, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle,
-  ArrowLeft,
-  Pill,
-  User,
-  Calendar,
-  Stethoscope
-} from 'lucide-react'
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge" // ADD THIS IMPORT
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { ArrowLeft, Upload, FileText, Check, Package, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import type { Product } from "@/lib/types"
+import { useCart } from "@/lib/hooks/use-cart"
 
-export function PrescriptionUploadPage() {
+export default function UploadPrescriptionPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(false)
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [formData, setFormData] = useState({
-    patientName: '',
-    doctorName: '',
-    prescriptionDate: '',
-    additionalNotes: ''
-  })
+  const { addItem } = useCart()
+  const [product, setProduct] = useState<Product | null>(null)
+  const [files, setFiles] = useState<File[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [notes, setNotes] = useState("")
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      // Validate file type
-      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']
-      if (!validTypes.includes(file.type)) {
-        toast({
-          title: "Invalid file type",
-          description: "Please upload JPG, PNG, or PDF files only.",
-          variant: "destructive"
-        })
-        return
-      }
+  useEffect(() => {
+    // Get the product from session storage
+    const productData = sessionStorage.getItem('prescriptionProduct')
+    if (productData) {
+      setProduct(JSON.parse(productData))
+    } else {
+      // If no product, redirect back to shop
+      router.push('/shop')
+    }
+  }, [router])
 
-      // Validate file size (5MB max)
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "File too large",
-          description: "Please upload files smaller than 5MB.",
-          variant: "destructive"
-        })
-        return
-      }
-
-      setUploadedFile(file)
-      toast({
-        title: "File uploaded",
-        description: `${file.name} has been successfully uploaded.`,
-      })
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files)
+      setFiles(selectedFiles)
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    
+    if (!product) return
+    
+    if (files.length === 0) {
+      toast({
+        title: "No file selected",
+        description: "Please select a prescription file to upload.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setUploading(true)
 
     try {
-      // Validate form
-      if (!uploadedFile) {
-        throw new Error('Please upload a prescription file')
-      }
-      if (!formData.patientName || !formData.doctorName || !formData.prescriptionDate) {
-        throw new Error('Please fill in all required fields')
-      }
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      // TODO: Integrate with backend for actual file upload
-      console.log('Prescription data:', {
-        ...formData,
-        file: uploadedFile
-      })
-
-      toast({
-        title: "Prescription Submitted!",
-        description: "Your prescription has been received and is being processed.",
-      })
-
-      // Redirect to shop or confirmation page
-      router.push('/shop?prescription=uploaded')
+      // Here you would upload to Firebase Storage or your backend
+      // For now, we'll simulate an upload
+      await new Promise(resolve => setTimeout(resolve, 1500))
       
-    } catch (error: any) {
+      // Add to cart after successful upload
+      addItem(product, 1)
+      
       toast({
-        title: "Submission failed",
-        description: error.message || "There was an error submitting your prescription.",
+        title: "Prescription uploaded successfully!",
+        description: `${product.name} has been added to your cart. Our pharmacist will review your prescription.`,
+      })
+      
+      // Clear session storage
+      sessionStorage.removeItem('prescriptionProduct')
+      
+      // Redirect to cart
+      setTimeout(() => {
+        router.push('/cart')
+      }, 1000)
+      
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload prescription. Please try again.",
         variant: "destructive"
       })
     } finally {
-      setIsLoading(false)
+      setUploading(false)
     }
   }
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }
-
-  const Features = () => (
-    <div className="space-y-6">
-      <h3 className="text-2xl font-bold text-center mb-8">Why Upload Your Prescription?</h3>
-      
-      <div className="space-y-4">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 flex-shrink-0">
-            <Shield className="h-6 w-6 text-green-600" />
-          </div>
-          <div>
-            <h4 className="font-semibold text-lg">Secure & Confidential</h4>
-            <p className="text-muted-foreground">
-              Your medical information is protected with HIPAA-compliant security measures.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 flex-shrink-0">
-            <Clock className="h-6 w-6 text-blue-600" />
-          </div>
-          <div>
-            <h4 className="font-semibold text-lg">Fast Processing</h4>
-            <p className="text-muted-foreground">
-              Prescriptions are typically verified within 2-4 hours during business days.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 flex-shrink-0">
-            <CheckCircle2 className="h-6 w-6 text-purple-600" />
-          </div>
-          <div>
-            <h4 className="font-semibold text-lg">Expert Verification</h4>
-            <p className="text-muted-foreground">
-              Licensed pharmacists review every prescription for accuracy and safety.
-            </p>
-          </div>
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
-
-      {/* Requirements */}
-      <Card className="border-amber-200 bg-amber-50">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-amber-800 text-lg">
-            <AlertCircle className="h-5 w-5" />
-            Prescription Requirements
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-2 text-sm text-amber-700">
-            <li className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-amber-600" />
-              Clear, readable image or PDF of your prescription
-            </li>
-            <li className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-amber-600" />
-              Doctor's signature and contact information
-            </li>
-            <li className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-amber-600" />
-              Patient name and prescription date
-            </li>
-            <li className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-amber-600" />
-              Medication name, strength, and dosage instructions
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
-    </div>
-  )
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2 transition-transform hover:scale-105">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70">
-              <Pill className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-bold">PharmaCare</span>
-          </Link>
-          <nav className="flex items-center gap-2">
-            <Link href="/shop">
-              <Button variant="outline" className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Shop
-              </Button>
-            </Link>
-          </nav>
-        </div>
-      </header>
-
       <div className="container mx-auto px-4 py-8">
-        <div className="mx-auto max-w-6xl">
-          {/* Page Header */}
-          <div className="mb-8 text-center">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-                <FileText className="h-8 w-8 text-primary" />
+        {/* Back Button */}
+        <Link
+          href="/shop"
+          className="group mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+          Back to Shop
+        </Link>
+
+        {/* Page Header */}
+        <div className="mb-8">
+          <h1 className="mb-2 text-3xl font-bold">Upload Prescription</h1>
+          <p className="text-muted-foreground">Upload your prescription for {product.name}</p>
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* Product Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-primary" />
+                Product Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg">
+                <AlertCircle className="h-6 w-6 text-amber-500" />
+                <div>
+                  <p className="font-medium text-gray-900">Prescription Required</p>
+                  <p className="text-sm text-gray-600">This medication requires a valid prescription</p>
+                </div>
               </div>
-            </div>
-            <h1 className="text-4xl font-bold">Upload Your Prescription</h1>
-            <p className="mt-2 text-muted-foreground text-lg">
-              Secure and convenient prescription submission for your medication needs
-            </p>
-          </div>
+              
+              <div className="space-y-2">
+                <p className="font-semibold">{product.name}</p>
+                <p className="text-sm text-muted-foreground">{product.description}</p>
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-2xl font-bold text-primary">E{product.price.toFixed(2)}</span>
+                  <Badge variant="outline">{product.category}</Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-          <div className="grid gap-8 lg:grid-cols-2">
-            {/* Upload Form */}
-            <div>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Stethoscope className="h-5 w-5" />
-                    Prescription Details
-                  </CardTitle>
-                  <CardDescription>
-                    Fill in your prescription information and upload a clear copy
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* File Upload */}
-                    <div className="space-y-4">
-                      <Label htmlFor="prescription-file">Upload Prescription *</Label>
-                      <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center transition-colors hover:border-primary/50">
-                        <input
-                          type="file"
-                          id="prescription-file"
-                          accept=".jpg,.jpeg,.png,.pdf"
-                          onChange={handleFileUpload}
-                          className="hidden"
-                        />
-                        <label htmlFor="prescription-file" className="cursor-pointer">
-                          <div className="flex flex-col items-center gap-3">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                              <Upload className="h-8 w-8 text-primary" />
-                            </div>
-                            <div>
-                              <p className="font-semibold">
-                                {uploadedFile ? uploadedFile.name : 'Click to upload prescription'}
-                              </p>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                JPG, PNG, or PDF (Max 5MB)
-                              </p>
-                            </div>
-                            {!uploadedFile && (
-                              <Button variant="outline" type="button">
-                                Choose File
-                              </Button>
-                            )}
-                          </div>
-                        </label>
-                      </div>
-                      {uploadedFile && (
-                        <div className="flex items-center gap-2 text-sm text-green-600">
-                          <CheckCircle2 className="h-4 w-4" />
-                          File uploaded successfully
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Patient Information */}
-                    <div className="space-y-4">
-                      <h4 className="font-semibold flex items-center gap-2">
-                        <User className="h-4 w-4" />
-                        Patient Information
-                      </h4>
-                      
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <Label htmlFor="patientName">Patient Full Name *</Label>
-                          <Input
-                            id="patientName"
-                            value={formData.patientName}
-                            onChange={(e) => handleInputChange('patientName', e.target.value)}
-                            placeholder="Enter patient's full name as on prescription"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="doctorName">Doctor's Name *</Label>
-                          <Input
-                            id="doctorName"
-                            value={formData.doctorName}
-                            onChange={(e) => handleInputChange('doctorName', e.target.value)}
-                            placeholder="Enter prescribing doctor's name"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="prescriptionDate">Prescription Date *</Label>
-                          <Input
-                            id="prescriptionDate"
-                            type="date"
-                            value={formData.prescriptionDate}
-                            onChange={(e) => handleInputChange('prescriptionDate', e.target.value)}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="additionalNotes">Additional Notes (Optional)</Label>
-                          <Textarea
-                            id="additionalNotes"
-                            value={formData.additionalNotes}
-                            onChange={(e) => handleInputChange('additionalNotes', e.target.value)}
-                            placeholder="Any special instructions or notes for the pharmacist..."
-                            rows={3}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Submit Button */}
-                    <Button
-                      type="submit"
-                      disabled={isLoading || !uploadedFile}
-                      className="w-full gap-2"
-                      size="lg"
+          {/* Upload Form */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5 text-primary" />
+                Upload Prescription
+              </CardTitle>
+              <CardDescription>
+                Upload a clear photo or scan of your valid prescription
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* File Upload */}
+                <div className="space-y-2">
+                  <Label htmlFor="prescription">Prescription File</Label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary transition-colors">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Drag & drop your prescription file here, or click to browse
+                    </p>
+                    <Input
+                      id="prescription"
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      multiple
+                    />
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      onClick={() => document.getElementById('prescription')?.click()}
                     >
-                      {isLoading ? (
-                        <>
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                          Processing Prescription...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-5 w-5" />
-                          Submit Prescription
-                        </>
-                      )}
+                      <Upload className="h-4 w-4 mr-2" />
+                      Select Files
                     </Button>
-                  </form>
-                </CardContent>
-              </Card>
-
-              {/* Security Notice */}
-              <Card className="mt-6 border-green-200 bg-green-50">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-3">
-                    <Shield className="h-5 w-5 text-green-600 mt-0.5" />
-                    <div>
-                      <h4 className="font-semibold text-green-800">Your Privacy is Protected</h4>
-                      <p className="text-sm text-green-700 mt-1">
-                        All prescription data is encrypted and handled in compliance with healthcare privacy 
-                        regulations. Only authorized pharmacists can access your information.
-                      </p>
+                  </div>
+                  {files.length > 0 && (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-sm font-medium">Selected files:</p>
+                      {files.map((file, index) => (
+                        <div key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <FileText className="h-4 w-4" />
+                          <span>{file.name}</span>
+                          <span className="text-xs">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                  )}
+                </div>
 
-            {/* Features & Information */}
-            <div>
-              <Features />
-            </div>
-          </div>
+                {/* Additional Notes */}
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Additional Notes (Optional)</Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="Any additional information for the pharmacist..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                  />
+                </div>
 
-          {/* Support Information */}
-          <Card className="mt-8">
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-                    <Clock className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">Processing Time</h4>
-                    <p className="text-sm text-muted-foreground">2-4 hours during business days</p>
-                  </div>
+                {/* Requirements */}
+                <div className="rounded-lg bg-muted p-4 space-y-2">
+                  <p className="text-sm font-medium">Requirements:</p>
+                  <ul className="text-sm text-muted-foreground space-y-1 pl-5 list-disc">
+                    <li>Prescription must be from a licensed healthcare provider</li>
+                    <li>Clear and readable image or scan</li>
+                    <li>Must include your name and date</li>
+                    <li>Medication name and dosage must match</li>
+                    <li>Maximum file size: 10MB per file</li>
+                  </ul>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                    <CheckCircle2 className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">Verification Rate</h4>
-                    <p className="text-sm text-muted-foreground">99% of prescriptions approved</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100">
-                    <User className="h-6 w-6 text-purple-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">Pharmacist Support</h4>
-                    <p className="text-sm text-muted-foreground">Available 24/7 for questions online</p>
-                  </div>
-                </div>
-              </div>
+
+                <Button
+                  type="submit"
+                  className="w-full gap-2"
+                  disabled={uploading || files.length === 0}
+                >
+                  {uploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Upload Prescription & Add to Cart
+                    </>
+                  )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </div>

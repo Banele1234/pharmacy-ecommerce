@@ -473,8 +473,11 @@ export function RegistrationForm() {
         console.log('Firebase registration successful:', userData);
         
         // Success - user is created in Firebase Auth and verification email is sent automatically
-        toast.success('Registration successful! Check your email for verification link.');
-        setCurrentStep(4);
+        toast.success('Registration successful! Redirecting to login...');
+
+        setTimeout(() => {
+          router.push('/login')
+        }, 2000)
         
       } catch (error: any) {
         console.error('Firebase registration error:', error);

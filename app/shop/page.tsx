@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Pill, Search, ShoppingCart, Star, ArrowLeft, Plus, Check, Package, Heart, AlertCircle } from "lucide-react"
+import { Pill, Search, ShoppingCart, Star, ArrowLeft, Plus, Check, Package, Heart, AlertCircle, Upload, RefreshCw } from "lucide-react"
 import { useCart } from "@/lib/hooks/use-cart"
 import { useToast } from "@/hooks/use-toast"
 import type { Product } from "@/lib/types"
 import { productService } from '@/lib/firebase/services/products'
-import { ProductImage } from "@/components/ui/ProductImage" // Import the new component
+import { ProductImage } from "@/components/ui/ProductImage"
+import { UserNavActions } from "@/components/layout/UserNavActions"
 
 export default function ShopPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -20,20 +21,36 @@ export default function ShopPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [addedToCart, setAddedToCart] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
+  const [cartItemCount, setCartItemCount] = useState(0)
 
   const { addItem, getItemCount } = useCart()
   const { toast } = useToast()
+
+  // Set mounted state when component mounts
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Update cart count when component mounts
+  useEffect(() => {
+    if (mounted) {
+      setCartItemCount(getItemCount())
+    }
+  }, [mounted, getItemCount])
 
   // Load products from Firebase
   useEffect(() => {
     const loadProducts = async () => {
       try {
+        console.log('🔄 Loading products...')
         setLoading(true)
         const productsData = await productService.getProducts()
-        setProducts(productsData)
-        setFilteredProducts(productsData)
-      } catch (error) {
-        console.error('Error loading products:', error)
+        console.log('✅ Products loaded:', productsData?.length || 0)
+        setProducts(productsData || [])
+        setFilteredProducts(productsData || [])
+      } catch (error: any) {
+        console.error('❌ Error loading products:', error)
         toast({
           title: "Error",
           description: "Failed to load products. Please try again.",
@@ -52,15 +69,28 @@ export default function ShopPage() {
 
     // Filter by category
     if (selectedCategory !== "all") {
-      filtered = filtered.filter((p) => p.category === selectedCategory)
+      const categoryMap: { [key: string]: string } = {
+        'pain-relief': 'Pain Relief',
+        'antibiotics': 'Antibiotics',
+        'vitamins': 'Vitamins',
+        'respiratory': 'Cold & Flu',
+        'digestive-health': 'Digestive Health',
+        'diabetes': 'Diabetes'
+      }
+      
+      const actualCategory = categoryMap[selectedCategory] || selectedCategory
+      filtered = filtered.filter((p) => 
+        p.category?.toLowerCase() === actualCategory.toLowerCase()
+      )
     }
 
     // Filter by search query
     if (searchQuery) {
       filtered = filtered.filter(
         (p) =>
-          p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          p.description.toLowerCase().includes(searchQuery.toLowerCase()),
+          p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          p.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          p.category?.toLowerCase().includes(searchQuery.toLowerCase()),
       )
     }
 
@@ -69,11 +99,9 @@ export default function ShopPage() {
 
   const handleAddToCart = (product: Product) => {
     if (product.requiresPrescription) {
-      toast({
-        title: "Prescription Required",
-        description: `${product.name} requires a prescription. Please upload one first.`,
-        variant: "destructive"
-      })
+      // Store product in session storage and redirect to prescription page
+      sessionStorage.setItem('prescriptionProduct', JSON.stringify(product))
+      window.location.href = '/prescription' // ✅ FIXED: Redirect to /prescription
       return
     }
 
@@ -88,6 +116,7 @@ export default function ShopPage() {
 
     addItem(product, 1)
     setAddedToCart(product.id)
+    setCartItemCount(getItemCount())
     setTimeout(() => setAddedToCart(null), 2000)
 
     toast({
@@ -96,9 +125,26 @@ export default function ShopPage() {
     })
   }
 
+  const handleRetry = () => {
+    setLoading(true)
+    productService.getProducts()
+      .then(data => {
+        setProducts(data || [])
+        setFilteredProducts(data || [])
+      })
+      .catch(err => {
+        toast({
+          title: "Error",
+          description: "Failed to load products. Please check your connection.",
+          variant: "destructive"
+        })
+      })
+      .finally(() => setLoading(false))
+  }
+
   // Format price in Emalangeni
   const formatPrice = (price: number) => {
-    return `E${price.toFixed(2)}`
+    return `E${price?.toFixed(2) || '0.00'}`
   }
 
   const categories = [
@@ -106,7 +152,7 @@ export default function ShopPage() {
     { id: "pain-relief", label: "Pain Relief", icon: Pill },
     { id: "antibiotics", label: "Antibiotics", icon: Heart },
     { id: "vitamins", label: "Vitamins", icon: Star },
-    { id: "respiratory", label: "Respiratory", icon: AlertCircle },
+    { id: "respiratory", label: "Cold & Flu", icon: AlertCircle },
     { id: "digestive-health", label: "Digestive Health", icon: Heart },
     { id: "diabetes", label: "Diabetes", icon: Heart },
   ]
@@ -117,7 +163,7 @@ export default function ShopPage() {
         {/* Header */}
         <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container mx-auto flex h-16 items-center justify-between px-4">
-            <Link href="/" className="flex items-center gap-2 transition-transform hover:scale-105">
+            <Link href="/" className="flex items-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70">
                 <Pill className="h-6 w-6 text-primary-foreground" />
               </div>
@@ -125,17 +171,12 @@ export default function ShopPage() {
             </Link>
             <nav className="flex items-center gap-2">
               <Link href="/cart">
-                <Button variant="outline" className="relative gap-2 bg-transparent">
+                <Button variant="outline" className="gap-2 bg-transparent">
                   <ShoppingCart className="h-4 w-4" />
                   <span className="hidden sm:inline">Cart</span>
-                  {getItemCount() > 0 && (
-                    <Badge className="absolute -right-2 -top-2 h-5 w-5 rounded-full p-0 text-xs">{getItemCount()}</Badge>
-                  )}
                 </Button>
               </Link>
-              <Link href="/login">
-                <Button variant="ghost">Login</Button>
-              </Link>
+              <UserNavActions />
             </nav>
           </div>
         </header>
@@ -166,14 +207,14 @@ export default function ShopPage() {
               <Button variant="outline" className="relative gap-2 bg-transparent">
                 <ShoppingCart className="h-4 w-4" />
                 <span className="hidden sm:inline">Cart</span>
-                {getItemCount() > 0 && (
-                  <Badge className="absolute -right-2 -top-2 h-5 w-5 rounded-full p-0 text-xs">{getItemCount()}</Badge>
+                {mounted && cartItemCount > 0 && (
+                  <Badge className="absolute -right-2 -top-2 h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center">
+                    {cartItemCount}
+                  </Badge>
                 )}
               </Button>
             </Link>
-            <Link href="/login">
-              <Button variant="ghost">Login</Button>
-            </Link>
+            <UserNavActions />
           </nav>
         </div>
       </header>
@@ -231,6 +272,12 @@ export default function ShopPage() {
           <p className="text-sm text-muted-foreground">
             Showing <span className="font-semibold text-foreground">{filteredProducts.length}</span> products
           </p>
+          {products.length === 0 && !loading && (
+            <Button variant="outline" size="sm" onClick={handleRetry} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          )}
         </div>
 
         {/* Products Grid */}
@@ -240,6 +287,16 @@ export default function ShopPage() {
               <Package className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
               <h3 className="mb-2 text-xl font-semibold">No products found</h3>
               <p className="text-muted-foreground">Try adjusting your search or filter criteria</p>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setSearchQuery("")
+                  setSelectedCategory("all")
+                }}
+                className="mt-4"
+              >
+                Clear Filters
+              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -252,9 +309,9 @@ export default function ShopPage() {
                 {/* Product Image */}
                 <div className="relative aspect-square overflow-hidden bg-muted">
                   <ProductImage
-                    src={product.imageUrl}
+                    src={product.imageUrl || (product as any).image || null}
                     alt={product.name}
-                    className="h-full w-full transition-transform duration-300 group-hover:scale-110"
+                    className="h-full w-full transition-transform duration-300 group-hover:scale-110 object-cover"
                   />
                   {product.requiresPrescription && (
                     <Badge className="absolute left-3 top-3 gap-1 bg-destructive/90 backdrop-blur">
@@ -301,31 +358,38 @@ export default function ShopPage() {
                       <span className="text-sm font-medium">4.8</span>
                     </div>
                   </div>
-                  <Button
-                    onClick={() => handleAddToCart(product)}
-                    disabled={product.stock === 0 || addedToCart === product.id || product.requiresPrescription}
-                    className="w-full gap-2 transition-all"
-                    variant={addedToCart === product.id ? "secondary" : "default"}
-                  >
-                    {addedToCart === product.id ? (
-                      <>
-                        <Check className="h-4 w-4" />
-                        Added to Cart!
-                      </>
-                    ) : product.requiresPrescription ? (
-                      <>
-                        <AlertCircle className="h-4 w-4" />
-                        Prescription Required
-                      </>
-                    ) : product.stock === 0 ? (
-                      "Out of Stock"
-                    ) : (
-                      <>
-                        <Plus className="h-4 w-4" />
-                        Add to Cart
-                      </>
-                    )}
-                  </Button>
+                  
+                  {/* Prescription Upload Button */}
+                  {product.requiresPrescription ? (
+                    <Button
+                      onClick={() => handleAddToCart(product)}
+                      className="w-full gap-2 transition-all bg-amber-500 hover:bg-amber-600 text-white"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload Prescription
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => handleAddToCart(product)}
+                      disabled={product.stock === 0 || addedToCart === product.id}
+                      className="w-full gap-2 transition-all"
+                      variant={addedToCart === product.id ? "secondary" : "default"}
+                    >
+                      {addedToCart === product.id ? (
+                        <>
+                          <Check className="h-4 w-4" />
+                          Added to Cart!
+                        </>
+                      ) : product.stock === 0 ? (
+                        "Out of Stock"
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4" />
+                          Add to Cart
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </CardFooter>
               </Card>
             ))}

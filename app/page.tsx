@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Pill, ShieldCheck, Truck, Clock, Star, ArrowRight, Heart, Package } from "lucide-react"
+import { UserNavActions } from "@/components/layout/UserNavActions"
 
 export default function HomePage() {
   return (
@@ -24,15 +25,7 @@ export default function HomePage() {
                 Shop Now
               </Button>
             </Link>
-            <Link href="/login">
-              <Button variant="ghost">Login</Button>
-            </Link>
-            <Link href="/signup">
-              <Button className="gap-2">
-                Sign Up
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            <UserNavActions />
           </nav>
         </div>
       </header>

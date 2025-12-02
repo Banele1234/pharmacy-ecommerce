@@ -1,32 +1,40 @@
 'use client'
 
-import { useState } from 'react'
-import { Pill } from 'lucide-react'
+import { useEffect, useState } from 'react'
+
+const DEFAULT_FALLBACK = '/placeholder.jpg'
 
 interface ProductImageProps {
-  src?: string
+  src?: string | null
   alt: string
   className?: string
+  fallbackSrc?: string
 }
 
-export function ProductImage({ src, alt, className = '' }: ProductImageProps) {
-  const [imageError, setImageError] = useState(false)
+export function ProductImage({
+  src,
+  alt,
+  className = '',
+  fallbackSrc = DEFAULT_FALLBACK,
+}: ProductImageProps) {
+  const [currentSrc, setCurrentSrc] = useState(src || fallbackSrc)
 
-  // If no src or image failed to load, show fallback
-  if (!src || imageError) {
-    return (
-      <div className={`bg-muted flex items-center justify-center ${className}`}>
-        <Pill className="h-12 w-12 text-muted-foreground" />
-      </div>
-    )
+  useEffect(() => {
+    setCurrentSrc(src || fallbackSrc)
+  }, [src, fallbackSrc])
+
+  const handleError = () => {
+    if (currentSrc !== fallbackSrc) {
+      setCurrentSrc(fallbackSrc)
+    }
   }
 
   return (
     <img
-      src={src}
+      src={currentSrc ?? fallbackSrc}
       alt={alt}
       className={className}
-      onError={() => setImageError(true)}
+      onError={handleError}
     />
   )
 }
