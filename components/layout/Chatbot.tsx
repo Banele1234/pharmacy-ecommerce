@@ -30,12 +30,13 @@ interface Message {
   sender: 'user' | 'bot'
   timestamp: Date
   type?: 'text' | 'quick_reply'
+  quickReplies?: QuickReply[]
 }
 
 interface QuickReply {
   id: string
   text: string
-  action: string
+  prompt: string
 }
 
 export function Chatbot() {
@@ -51,7 +52,8 @@ export function Chatbot() {
   ])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [conversationContext, setConversationContext] = useState<string[]>([])
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false)
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -64,160 +66,141 @@ export function Chatbot() {
 
   // Quick reply options
   const quickReplies: QuickReply[] = [
-    { id: '1', text: '💊 Medication Information', action: 'medication_info' },
-    { id: '2', text: '📋 Prescription Upload', action: 'prescription_upload' },
-    { id: '3', text: '🚚 Delivery & Shipping', action: 'delivery_info' },
-    { id: '4', text: '💳 Payment Methods', action: 'payment_info' },
-    { id: '5', text: '🕒 Store Hours & Contact', action: 'contact_info' },
-    { id: '6', text: '🌡️ Emergency Services', action: 'emergency_info' }
+    { id: 'qr-1', text: '💊 Medication Info', prompt: 'Tell me about pain relief medications.' },
+    { id: 'qr-2', text: '📋 Prescription Upload', prompt: 'How do I upload my prescription?' },
+    { id: 'qr-3', text: '🚚 Delivery & Shipping', prompt: 'What delivery options do you have in Eswatini?' },
+    { id: 'qr-4', text: '💳 Payment Methods', prompt: 'Which payment methods do you accept?' },
+    { id: 'qr-5', text: '🕒 Store Hours & Contact', prompt: 'What are your store hours and contact details?' },
+    { id: 'qr-6', text: '🌡️ Emergency Services', prompt: 'Who do I call in a medical emergency in Eswatini?' }
   ]
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const existingSession = sessionStorage.getItem('pharmacare_chat_session')
+    if (existingSession) {
+      setSessionId(existingSession)
+      return
+    }
+
+    const newSessionId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `session-${Date.now()}`
+    sessionStorage.setItem('pharmacare_chat_session', newSessionId)
+    setSessionId(newSessionId)
+  }, [])
+
+  useEffect(() => {
+    const loadHistory = async (activeSessionId: string) => {
+      try {
+        setIsHistoryLoading(true)
+        const response = await fetch(`/api/chatbot?sessionId=${activeSessionId}`)
+        if (!response.ok) {
+          throw new Error('Failed to load history')
+        }
+        const data = await response.json()
+        const formattedMessages: Message[] = (data.history || []).map(
+          (entry: any, index: number) => ({
+            id: `${entry.role}-${index}-${entry.createdAt}`,
+            text: entry.text,
+            sender: entry.role,
+            timestamp: new Date(entry.createdAt || Date.now()),
+            type: entry?.metadata?.quickReplies?.length ? 'quick_reply' : 'text',
+            quickReplies: entry?.metadata?.quickReplies,
+          }),
+        )
+
+        if (formattedMessages.length) {
+          setMessages(formattedMessages)
+        }
+      } catch (error) {
+        console.error('Failed to hydrate chatbot history', error)
+      } finally {
+        setIsHistoryLoading(false)
+      }
+    }
+
+    if (sessionId) {
+      loadHistory(sessionId)
+    }
+  }, [sessionId])
+
+  const handleSendMessage = async (overrideMessage?: string) => {
+    if (isLoading) return
+
+    const content = (overrideMessage ?? inputMessage).trim()
+    if (!content) return
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputMessage,
+      text: content,
       sender: 'user',
       timestamp: new Date(),
       type: 'text'
     }
 
     setMessages(prev => [...prev, userMessage])
-    setConversationContext(prev => [...prev, inputMessage])
     setInputMessage('')
     setIsLoading(true)
 
-    // Simulate AI processing with enhanced response generation
-    setTimeout(() => {
-      const botResponse = generateEnhancedBotResponse(inputMessage, conversationContext)
+    try {
+      const response = await fetch('/api/chatbot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: content, sessionId })
+      })
+
+      if (!response.ok) {
+        throw new Error('Assistant unavailable')
+      }
+
+      const data = await response.json()
+
+      if (!sessionId && data.sessionId) {
+        sessionStorage.setItem('pharmacare_chat_session', data.sessionId)
+        setSessionId(data.sessionId)
+      }
+
+      const quickReplyPayload: QuickReply[] = (data.quickReplies || [])
+        .map((reply: any, index: number) => ({
+          id: reply.id ?? `server-qr-${index}`,
+          text: reply.text ?? reply.label ?? 'Learn more',
+          prompt: reply.prompt ?? reply.text ?? ''
+        }))
+        .filter((reply: QuickReply) => reply.prompt)
+
+      const assistantText =
+        data.response ||
+        'I am still learning about that question. Could you rephrase or contact our pharmacists directly at +268 2404 1234?'
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: botResponse.response,
+        text: assistantText,
         sender: 'bot',
         timestamp: new Date(),
-        type: botResponse.quickReplies ? 'quick_reply' : 'text'
+        type: quickReplyPayload.length ? 'quick_reply' : 'text',
+        quickReplies: quickReplyPayload.length ? quickReplyPayload : undefined
       }
+
       setMessages(prev => [...prev, botMessage])
+    } catch (error) {
+      console.error('Chatbot error', error)
+      const fallbackMessage: Message = {
+        id: `${Date.now()}-error`,
+        text: '😔 I could not reach the assistant right now. Please try again shortly or contact our pharmacists at +268 2404 1234.',
+        sender: 'bot',
+        timestamp: new Date(),
+        type: 'text'
+      }
+      setMessages(prev => [...prev, fallbackMessage])
+    } finally {
       setIsLoading(false)
-    }, 1200 + Math.random() * 800) // Random delay for natural feel
+    }
   }
 
-  const handleQuickReply = (action: string) => {
-    let response = ''
-    
-    switch (action) {
-      case 'medication_info':
-        response = "💊 **Medication Information**\n\nI can help you with:\n• Prescription medication details\n• Over-the-counter products\n• Dosage instructions\n• Side effects information\n• Drug interactions\n• Generic alternatives\n\nWhich medication are you interested in?"
-        break
-      case 'prescription_upload':
-        response = "📋 **Prescription Upload**\n\nTo upload your prescription:\n1. Click 'Upload Prescription' on our website\n2. Take clear photos of your prescription\n3. Fill in patient details\n4. Our pharmacists will verify within 2-4 hours\n\nWe accept JPG, PNG, and PDF files. All prescriptions are verified by licensed pharmacists."
-        break
-      case 'delivery_info':
-        response = "🚚 **Delivery Information**\n\n• **Standard Delivery**: 24-48 hours across Eswatini\n• **Express Delivery**: Same-day in major cities\n• **Free Shipping**: Orders over 50,000 SZL\n• **Regular Shipping**: 250 SZL for orders under 50,000 SZL\n• **Tracking**: Real-time order tracking available\n\nWe deliver to all regions in Eswatini!"
-        break
-      case 'payment_info':
-        response = "💳 **Payment Methods**\n\nWe accept:\n• **MTN Mobile Money** (Recommended)\n• **Credit/Debit Cards** (Visa, MasterCard)\n• **Cash on Delivery**\n• **Bank Transfer**\n• **E-wallets**\n\nAll payments are secure and encrypted. MTN MoMo offers instant confirmation!"
-        break
-      case 'contact_info':
-        response = "🕒 **Contact Information**\n\n**PharmaCare Headquarters**\n📍 Location: Manzini, Eswatini\n📞 Phone: +268 XX XXX XXXX\n📧 Email: support@pharmacare.org\n\n**Business Hours**\nMonday - Friday: 8:00 AM - 8:00 PM\nSaturday: 9:00 AM - 6:00 PM\nSunday: 10:00 AM - 4:00 PM\n\n24/7 Online Support Available!"
-        break
-      case 'emergency_info':
-        response = "🚨 **Emergency Services**\n\nFor medical emergencies:\n• **Call Emergency Services**: 933\n• **Poison Control**: +268 XX XXX XXXX\n• **Nearest Hospital**: Contact local emergency services\n\nFor urgent medication needs outside business hours, please visit your nearest hospital or emergency clinic."
-        break
-      default:
-        response = "I'm here to help! What specific information are you looking for about our pharmacy services?"
-    }
-
-    const quickReplyMessage: Message = {
-      id: Date.now().toString(),
-      text: response,
-      sender: 'bot',
-      timestamp: new Date(),
-      type: 'text'
-    }
-
-    setMessages(prev => [...prev, quickReplyMessage])
-  }
-
-  const generateEnhancedBotResponse = (userMessage: string, context: string[]): { response: string; quickReplies?: boolean } => {
-    const message = userMessage.toLowerCase()
-    const lastUserMessage = context[context.length - 2] || ''
-
-    // Enhanced medication responses
-    if (message.includes('paracetamol') || message.includes('panado') || message.includes('pain') || message.includes('fever') || message.includes('headache')) {
-      return {
-        response: "💊 **Paracetamol Information**\n\n**Uses**: Pain relief, fever reduction\n**Dosage**: 500mg-1000mg every 4-6 hours\n**Max Daily**: 4000mg (8 tablets)\n**Price**: Starting from 25 SZL\n**Availability**: Over-the-counter\n\n**Safety Notes**:\n• Do not exceed recommended dosage\n• Consult doctor if pain persists beyond 3 days\n• Avoid alcohol while taking\n\nWould you like me to show you our pain relief products or do you have other questions?",
-        quickReplies: true
-      }
-    }
-
-    if (message.includes('amoxicillin') || message.includes('antibiotic') || message.includes('infection') || message.includes('bacterial')) {
-      return {
-        response: "💊 **Amoxicillin Information**\n\n**Type**: Prescription antibiotic\n**Uses**: Bacterial infections\n**Common Forms**: 250mg, 500mg capsules\n**Price Range**: 85-150 SZL\n**Requires**: Valid prescription\n\n**Important**:\n• Complete full course as prescribed\n• Take with or without food\n• Store at room temperature\n• Report any allergic reactions immediately\n\nYou can upload your prescription through our website for verification.",
-        quickReplies: true
-      }
-    }
-
-    if (message.includes('vitamin') || message.includes('supplement') || message.includes('immune') || message.includes('multivitamin')) {
-      return {
-        response: "🌿 **Vitamins & Supplements**\n\nWe offer a comprehensive range:\n• **Vitamin C** - Immune support (45 SZL)\n• **Multivitamins** - Daily nutrition (78 SZL)\n• **Vitamin D** - Bone health (55 SZL)\n• **Omega-3** - Heart health (120 SZL)\n• **Probiotics** - Gut health (95 SZL)\n\nAll supplements are third-party tested and available without prescription. Check our supplements category for full selection!",
-        quickReplies: true
-      }
-    }
-
-    // Enhanced delivery responses
-    if (message.includes('delivery') || message.includes('shipping') || message.includes('deliver') || message.includes('ship') || message.includes('time')) {
-      return {
-        response: "🚚 **Delivery Services**\n\n**Standard Delivery**:\n• 24-48 hours across Eswatini\n• Free for orders over 50,000 SZL\n• 250 SZL for orders under 50,000 SZL\n\n**Express Delivery**:\n• Same-day in Manzini & Mbabane\n• Additional 150 SZL\n• Order before 2:00 PM\n\n**Features**:\n• Real-time tracking\n• SMS notifications\n• Secure packaging\n• Contactless delivery available\n\nWhere would you like your order delivered?",
-        quickReplies: true
-      }
-    }
-
-    // Enhanced prescription responses
-    if (message.includes('prescription') || message.includes('upload') || message.includes('doctor') || message.includes('rx')) {
-      return {
-        response: "📋 **Prescription Services**\n\n**How to Upload**:\n1. Visit 'Upload Prescription' page\n2. Take clear photos/scan\n3. Fill patient information\n4. Submit for verification\n\n**Processing**:\n• Verification: 2-4 hours (business days)\n• Licensed pharmacist review\n• SMS confirmation upon approval\n\n**Accepted Formats**: JPG, PNG, PDF (max 5MB)\n\n**Requirements**: Doctor's signature, patient name, medication details, and date are required.",
-        quickReplies: true
-      }
-    }
-
-    // Context-aware responses
-    if (lastUserMessage.includes('pain') && (message.includes('alternative') || message.includes('other') || message.includes('different'))) {
-      return {
-        response: "💊 **Alternative Pain Relief Options**\n\nBesides Paracetamol, we offer:\n• **Ibuprofen** - Anti-inflammatory (35 SZL)\n• **Aspirin** - Pain & inflammation (28 SZL)\n• **Diclofenac** - Stronger pain relief (45 SZL)\n• **Combination products** - Enhanced relief\n\nConsult with our pharmacists for the best option based on your specific needs. Some alternatives may require prescription.",
-        quickReplies: true
-      }
-    }
-
-    // Enhanced greeting responses
-    if (message.includes('hello') || message.includes('hi') || message.includes('hey') || message.includes('good morning') || message.includes('good afternoon')) {
-      return {
-        response: "👋 Hello! Welcome to PharmaCare Eswatini! I'm your AI assistant here to help with:\n\n💊 Medication information\n📋 Prescription services\n🚚 Delivery options\n💳 Payment methods\n🕒 Store information\n🌡️ Health advice\n\nHow can I assist you with your healthcare needs today?",
-        quickReplies: true
-      }
-    }
-
-    // Enhanced thank you responses
-    if (message.includes('thank') || message.includes('thanks') || message.includes('appreciate')) {
-      return {
-        response: "😊 You're very welcome! I'm glad I could help. Remember, our licensed pharmacists are always available if you need more detailed medical advice. Is there anything else about our pharmacy services I can assist you with today?",
-        quickReplies: true
-      }
-    }
-
-    // Default intelligent response
-    const defaultResponses = [
-      "I specialize in pharmacy and healthcare services. You can ask me about medications, prescription uploads, delivery options, payment methods, or store information. What specific area can I help you with?",
-      "As your PharmaCare assistant, I'm here to provide accurate information about medications, healthcare products, and our services. What would you like to know more about?",
-      "I can help you navigate our pharmacy services, find the right medications, understand prescription requirements, or assist with your orders. What do you need help with today?",
-      "Whether it's medication information, delivery questions, or prescription services, I'm here to help! What specific information are you looking for?"
-    ]
-
-    return {
-      response: defaultResponses[Math.floor(Math.random() * defaultResponses.length)],
-      quickReplies: true
-    }
+  const handleQuickReply = (prompt: string) => {
+    handleSendMessage(prompt)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -236,19 +219,51 @@ export function Chatbot() {
     ))
   }
 
+  const lastMessage = messages[messages.length - 1]
+  const shouldShowQuickReplies = lastMessage?.sender === 'bot'
+  const activeQuickReplies =
+    shouldShowQuickReplies && lastMessage?.quickReplies?.length
+      ? lastMessage.quickReplies
+      : shouldShowQuickReplies
+        ? quickReplies
+        : []
+
   return (
     <>
       {/* Chatbot Toggle Button */}
-      <Button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-40 h-16 w-16 rounded-full shadow-2xl transition-all duration-300 hover:scale-110 hover:shadow-3xl bg-gradient-to-r from-primary to-primary/80"
-        size="lg"
-      >
-        <MessageCircle className="h-6 w-6" />
-        <Badge className="absolute -top-1 -right-1 h-6 w-6 rounded-full p-0 text-xs bg-green-500 border-2 border-background">
-          <Bot className="h-3 w-3" />
-        </Badge>
-      </Button>
+      <div className="fixed bottom-4 right-4 z-40 flex w-[calc(100%-2rem)] max-w-xs flex-col items-stretch gap-2 sm:max-w-sm sm:items-end">
+        <div className="rounded-2xl border border-primary/20 bg-background/95 px-4 py-3 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-lg">
+              <Bot className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-primary font-semibold">PharmaCare AI</p>
+              <p className="text-sm font-semibold text-foreground">Ask our assistant anything</p>
+              <p className="text-[11px] text-muted-foreground">Medication • Delivery • Prescriptions</p>
+            </div>
+          </div>
+        </div>
+        <Button
+          aria-label="Open PharmaCare AI Assistant"
+          onClick={() => setIsOpen(true)}
+          className="group relative flex items-center justify-between rounded-2xl bg-gradient-to-r from-primary via-primary/80 to-secondary px-4 py-3 text-primary-foreground shadow-2xl transition-all duration-300 hover:translate-y-[-2px] hover:shadow-3xl"
+        >
+          <div className="absolute inset-0 rounded-2xl bg-white/30 opacity-0 blur-lg transition-opacity duration-300 group-hover:opacity-80" />
+          <div className="relative flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-foreground/20">
+              <MessageCircle className="h-5 w-5" />
+            </div>
+            <div className="text-left">
+              <p className="text-xs uppercase tracking-[0.2em] text-primary-foreground/70">Chatbot</p>
+              <p className="text-sm font-semibold leading-tight">Open AI assistant</p>
+            </div>
+          </div>
+          <Badge className="relative bg-emerald-500 text-white border border-background px-2 text-[11px]">
+            Live
+          </Badge>
+        </Button>
+      </div>
 
       {/* Chatbot Modal */}
       {isOpen && (
@@ -290,6 +305,11 @@ export function Chatbot() {
             <CardContent className="p-4 h-[calc(100%-120px)] flex flex-col">
               {/* Messages Container */}
               <div className="flex-1 overflow-y-auto space-y-4 mb-4 custom-scrollbar">
+                {isHistoryLoading && (
+                  <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
+                    Restoring your previous conversation...
+                  </div>
+                )}
                 {messages.map((message) => (
                   <div
                     key={message.id}
@@ -350,16 +370,16 @@ export function Chatbot() {
               </div>
 
               {/* Quick Reply Buttons */}
-              {messages[messages.length - 1]?.type === 'quick_reply' && (
+              {activeQuickReplies.length > 0 && (
                 <div className="space-y-2 mb-4">
                   <p className="text-xs text-muted-foreground font-medium">Quick options:</p>
                   <div className="flex flex-wrap gap-2">
-                    {quickReplies.map((reply) => (
+                    {activeQuickReplies.map((reply) => (
                       <Button
                         key={reply.id}
                         variant="outline"
                         size="sm"
-                        onClick={() => handleQuickReply(reply.action)}
+                        onClick={() => handleQuickReply(reply.prompt)}
                         className="text-xs h-8 border-primary/20 hover:bg-primary/10 hover:border-primary/40 transition-all"
                       >
                         {reply.text}
@@ -380,7 +400,7 @@ export function Chatbot() {
                   disabled={isLoading}
                 />
                 <Button
-                  onClick={handleSendMessage}
+                  onClick={() => handleSendMessage()}
                   disabled={!inputMessage.trim() || isLoading}
                   size="icon"
                   className="bg-primary hover:bg-primary/90 transition-all"
