@@ -1,20 +1,24 @@
 // app/layout.tsx
 import type React from "react"
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import localFont from "next/font/local"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/toaster"
 import { Chatbot } from "@/components/layout/Chatbot"
 import "./globals.css"
 
-const geist = Geist({ 
-  subsets: ["latin"],
-  variable: '--font-geist',
+const geist = localFont({
+  src: "./fonts/GeistVariable.woff2",
+  variable: "--font-geist",
+  display: "swap",
+  weight: "100 900",
 })
 
-const geistMono = Geist_Mono({ 
-  subsets: ["latin"],
-  variable: '--font-geist-mono',
+const geistMono = localFont({
+  src: "./fonts/GeistMonoVariable.woff2",
+  variable: "--font-geist-mono",
+  display: "swap",
+  weight: "100 900",
 })
 
 export const metadata: Metadata = {
